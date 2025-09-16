@@ -1,4 +1,5 @@
-import requests
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
 import httpx
 
 FSMVID_DOWNLOAD_URL = "https://fsmvid.com/api/proxy"
@@ -11,16 +12,18 @@ class PinterestDown:
             "url": download_url
         }
 
+        datas = None
         async with httpx.AsyncClient() as client:
             await client.get(FSMVID_BASE_URL)
             resp = await client.post(FSMVID_DOWNLOAD_URL, json=payload)
-            print(resp.json())
+            datas = resp.json()
+        
 
 
 if __name__ == "__main__":
     import asyncio
     pinterest_down = PinterestDown()
-    asyncio.run(pinterest_down.fsmvid_api("pinterest", "https://www.pinterest.com/pin/14636767535799685/"))
+    asyncio.run(pinterest_down.fsmvid_api("youtube", "https://www.youtube.com/watch?v=hNhQoVwXJCc&list=RD5xlNfz4hSBw&index=6"))
 
     
 
