@@ -1,0 +1,5 @@
+q_no,template_id,topic_id,level,mode,lang,prompt_text,time_limit_s
+1,q_hb_pets_al_1,hb_pets,AL,roleplay,en,(Role-play) Call a vet to describe your pet's symptoms.,60
+2,q_hb_cook_al_1,hb_cooking,AL,explain,en,Explain how your cooking preferences have changed over time.,60
+3,q_tr_overseas_al_1,tr_overseas_trip,AL,roleplay,en,(Role-play) Call a hotel to change your reservation dates.,60
+4,q_ft_movies_al_1,ft_movies_cinema,AL,compare,en,Compare watching movies at a cinema and at home.,60

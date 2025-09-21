@@ -5,6 +5,7 @@
 import sys, time, random, base64, os, re
 from dataclasses import dataclass
 from typing import Optional, Union
+import os
 
 from PySide6.QtCore import Qt, QSize, QRunnable, QThreadPool, QObject, Signal, QTimer
 from PySide6.QtGui import QPixmap, QColor, QPainter, QPainterPath
@@ -146,7 +147,7 @@ class FakeWorker(QRunnable):
         self.s.status.emit("Đang tải…")
         for i in range(101):
             time.sleep(0.018 + random.uniform(0, 0.008))
-            self.s.progress.emit(i)
+            self.s.progress.emit( )
         self.s.status.emit("Hoàn tất")
 
 # ----------------- Smooth List -----------------
@@ -290,13 +291,15 @@ class DownloadsPage(QWidget):
 
     def _emit_add_task(self):
         url = self.urlEdit.text().strip()
-        if not url or not URL_RE.search(url):
+        urls = user_url_parser(url)
+        if not urls:
             InfoBar.error(
                 title="URL không hợp lệ",
                 content="Hãy nhập đường dẫn bắt đầu bằng http(s)://",
                 position=InfoBarPosition.TOP_RIGHT, duration=2000, parent=self
             )
             return
+        
         self.addTaskRequested.emit(url)
         self.urlEdit.clear()
 
@@ -313,7 +316,7 @@ class DownloadsPage(QWidget):
 class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
-        setTheme(Theme.AUTO)         # theo hệ thống; có thể đổi LIGHT/DARK
+        setTheme(Theme.AUTO)
         setThemeColor(ACCENT)
 
         self.resize(1040, 680)
@@ -326,7 +329,6 @@ class MainWindow(FluentWindow):
         self.initNavigation()
         apply_global_styles(self)
 
-        # Seed vài task mẫu (tùy chọn)
         QTimer.singleShot(250, self._populate_fake)
 
     def initNavigation(self):
@@ -343,16 +345,14 @@ class MainWindow(FluentWindow):
 
     # -------------- Actions --------------
     def add_task_from_url(self, url: str):
-        # Bạn có thể phân tích URL để tạo mô tả & kích thước sơ bộ
         desc = "Đang phân tích metadata…"
         size = "—"
-        # tạo thumbnail bo góc luôn
+
         thumb = pm_placeholder(THUMB_W, THUMB_H)
         task = DownloadTask(url=url, description=desc, size_text=size, thumbnail=thumb)
         widget = DownloadItemWidget(task)
         self.downloadsPage.addDownloadItem(widget)
 
-        # Khởi worker (demo). Thay FakeWorker bằng downloader thật.
         worker = FakeWorker(widget)
         worker.s.status.connect(widget.setStatus)
         worker.s.progress.connect(widget.setProgress)
@@ -383,6 +383,17 @@ class MainWindow(FluentWindow):
             worker.s.status.connect(widget.setStatus)
             worker.s.progress.connect(widget.setProgress)
             self.threadPool.start(worker)
+
+
+def user_url_parser(user_url):
+    urls = None
+    if not user_url or not URL_RE.search(user_url):
+        pass
+    if os.path.exists(user_url):
+        with open(user_url, "r", encoding="utf-8") as file:
+            urls = file.readlines()
+    return urls
+
 
 # ----------------- Entrypoint -----------------
 if __name__ == "__main__":
