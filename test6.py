@@ -390,8 +390,12 @@ def user_url_parser(user_url):
     if not user_url or not URL_RE.search(user_url):
         pass
     if os.path.exists(user_url):
+        urls=[]
         with open(user_url, "r", encoding="utf-8") as file:
-            urls = file.readlines()
+            for line in file.readlines():
+                if not line.strip():
+                    continute
+                urls.append(line)
     return urls
 
 
