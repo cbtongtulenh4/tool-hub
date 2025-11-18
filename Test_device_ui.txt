@@ -1,0 +1,197 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Smartphone, Loader2 } from "lucide-react"
+
+type StreamStatus = "idle" | "connecting" | "streaming" | "error"
+
+export default function DevicePreview() {
+  const [status, setStatus] = useState<StreamStatus>("idle")
+  const [error, setError] = useState<string | null>(null)
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+
+  // cleanup khi unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close()
+      }
+    }
+  }, [])
+
+  const handleConnect = async () => {
+    if (status === "connecting" || status === "streaming") return
+
+    setStatus("connecting")
+    setError(null)
+
+    try {
+      // 🔥 GỌI API BACKEND ĐỂ TẠO SESSION / START STREAM
+      // Bạn sửa URL này cho khớp với FastAPI của bạn (VD: http://api-server/sessions)
+      const res = await fetch("/api/device/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // nếu cần truyền deviceId, thêm body:
+        // body: JSON.stringify({ deviceId: "R3CN1234" }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Không thể bắt đầu stream từ device")
+      }
+
+      const data = (await res.json()) as {
+        sessionId: string
+        viewerWsUrl: string
+      }
+
+      // 🔗 Tạo WebSocket tới viewer URL mà server trả về
+      const ws = new WebSocket(data.viewerWsUrl)
+      ws.binaryType = "arraybuffer"
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        setStatus("streaming")
+      }
+
+      ws.onmessage = async (event) => {
+        const arrayBuffer = event.data as ArrayBuffer
+        const blob = new Blob([arrayBuffer], { type: "image/jpeg" })
+        const bitmap = await createImageBitmap(blob)
+
+        const canvas = canvasRef.current
+        if (!canvas) return
+
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+
+        // bạn có thể scale lại nếu muốn cố định tỉ lệ
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+
+        ctx.drawImage(bitmap, 0, 0)
+      }
+
+      ws.onerror = () => {
+        setStatus("error")
+        setError("Lỗi kết nối stream")
+      }
+
+      ws.onclose = () => {
+        wsRef.current = null
+        setStatus((prev) => (prev === "streaming" ? "idle" : prev))
+      }
+    } catch (e: any) {
+      console.error(e)
+      setStatus("error")
+      setError(e?.message ?? "Có lỗi xảy ra")
+    }
+  }
+
+  const isConnecting = status === "connecting"
+  const isStreaming = status === "streaming"
+
+  return (
+    <Card className="w-[30%] bg-slate-900 border-slate-700 flex flex-col dark:bg-slate-900/50">
+      <CardHeader className="pb-3 flex-shrink-0 border-b border-slate-700 flex items-center justify-between">
+        <CardTitle className="text-sm flex items-center gap-2 text-slate-200">
+          <Smartphone className="w-4 h-4" />
+          Device View
+        </CardTitle>
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 hover:text-cyan-100"
+          onClick={handleConnect}
+          disabled={isConnecting}
+        >
+          {isConnecting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+          {isStreaming ? "Reconnect" : "Connect"}
+        </Button>
+      </CardHeader>
+
+      <CardContent className="flex-1 flex flex-col gap-2 p-4 overflow-hidden">
+        {/* Phone Frame */}
+        <div className="relative w-full h-full max-h-96 max-w-48 mx-auto rounded-3xl bg-slate-950 border-8 border-slate-800 shadow-2xl overflow-hidden flex items-center justify-center">
+          {/* Phone Screen */}
+          <div className="absolute inset-2 bg-black rounded-2xl flex flex-col overflow-hidden">
+            {/* Status Bar */}
+            <div className="w-full h-6 bg-slate-950/90 flex items-center justify-between px-3 text-xs text-slate-400">
+              <span>9:41</span>
+              <div className="flex gap-1">
+                <span>📶</span>
+                <span>🔋</span>
+              </div>
+            </div>
+
+            {/* Screen area: hoặc canvas, hoặc placeholder */}
+            <div className="flex-1 relative bg-slate-900 flex items-center justify-center">
+              {/* Canvas hiển thị device */}
+              <canvas
+                ref={canvasRef}
+                className={`w-full h-full object-contain ${
+                  !isStreaming ? "opacity-0" : "opacity-100"
+                } transition-opacity duration-200`}
+              />
+
+              {/* Overlay trạng thái khi chưa có stream */}
+              {!isStreaming && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4">
+                  {isConnecting ? (
+                    <>
+                      <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                      <p className="text-xs text-slate-300 text-center">
+                        Đang kết nối tới device...
+                      </p>
+                    </>
+                  ) : status === "error" ? (
+                    <>
+                      <p className="text-xs text-red-400 text-center">
+                        {error ?? "Không thể hiển thị thiết bị"}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Kiểm tra agent & kết nối mạng rồi bấm lại Connect.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                        <Smartphone className="w-6 h-6 text-cyan-400" />
+                      </div>
+                      <p className="text-xs text-slate-300 text-center">
+                        Nhấn <span className="font-semibold text-cyan-300">Connect</span> để xem màn hình device
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Live indicator khi streaming */}
+              {isStreaming && (
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[11px] text-cyan-300 bg-slate-950/80 px-2 py-1 rounded-full">
+                  <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
+                  <span>Live</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Phone Notch */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-7 bg-slate-950 rounded-b-3xl border-l-8 border-r-8 border-slate-800" />
+        </div>
+
+        {error && (
+          <p className="text-[11px] text-red-400 text-center mt-1">
+            {error}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
